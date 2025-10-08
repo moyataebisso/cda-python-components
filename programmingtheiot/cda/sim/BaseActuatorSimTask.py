@@ -1,67 +1,85 @@
 #####
-# 
+#
 # This class is part of the Programming the Internet of Things
 # project, and is available via the MIT License, which can be
 # found in the LICENSE file at the top level of this repository.
-# 
-# You may find it more helpful to your design to adjust the
-# functionality, constants and interfaces (if there are any)
-# provided within in order to meet the needs of your specific
-# Programming the Internet of Things project.
-# 
+#
+# Copyright (c) 2020 - 2025 by Andrew D. King
+#
 
 import logging
-import random
-
 import programmingtheiot.common.ConfigConst as ConfigConst
-
 from programmingtheiot.data.ActuatorData import ActuatorData
 
-class BaseActuatorSimTask():
-	"""
-	Shell representation of class for student implementation.
-	
-	"""
-
-	def __init__(self, name: str = ConfigConst.NOT_SET, typeID: int = ConfigConst.DEFAULT_ACTUATOR_TYPE, simpleName: str = "Actuator"):
-		pass
-		
-	def getLatestActuatorResponse(self) -> ActuatorData:
-		"""
-		This can return the current ActuatorData response instance or a copy.
-		"""
-		pass
-	
-	def getSimpleName(self) -> str:
-		pass
-	
-	def updateActuator(self, data: ActuatorData) -> bool:
-		"""
-		NOTE: If 'data' is valid, the actuator-specific work can be delegated
-		as follows:
-		 - if command is ON: call self._activateActuator()
-		 - if command is OFF: call self._deactivateActuator()
-		
-		Both of these methods will have a generic implementation (logging only) within
-		this base class, although the sub-class may override if preferable.
-		"""
-		pass
-		
-	def _activateActuator(self, val: float = ConfigConst.DEFAULT_VAL, stateData: str = None) -> int:
-		"""
-		Implement basic logging. Actuator-specific functionality should be implemented by sub-class.
-		
-		@param val The actuation activation value to process.
-		@param stateData The string state data to use in processing the command.
-		"""
-		pass
-		
-	def _deactivateActuator(self, val: float = ConfigConst.DEFAULT_VAL, stateData: str = None) -> int:
-		"""
-		Implement basic logging. Actuator-specific functionality should be implemented by sub-class.
-		
-		@param val The actuation activation value to process.
-		@param stateData The string state data to use in processing the command.
-		"""
-		pass
-		
+class BaseActuatorSimTask:
+    """
+    Base class for actuator simulation tasks.
+    """
+    
+    def __init__(self, name = ConfigConst.NOT_SET, 
+                 typeID = ConfigConst.DEFAULT_ACTUATOR_TYPE, 
+                 simpleName = "Actuator"):
+        """
+        Constructor.
+        """
+        self.name = name
+        self.typeID = typeID
+        self.simpleName = simpleName
+        self.lastKnownCommand = None
+        self.lastKnownValue = None
+    
+    def updateActuator(self, data: ActuatorData) -> ActuatorData:
+        """
+        Update the actuator based on the command data.
+        """
+        if data and self.typeID == data.getTypeID():
+            curCommand = data.getCommand()
+            curVal = data.getValue()
+            
+            # Check for duplicate command
+            if curCommand == self.lastKnownCommand and curVal == self.lastKnownValue:
+                logging.debug("Ignoring repeated actuator command and value: %s %s",
+                            str(curCommand), str(curVal))
+                return None
+            
+            statusCode = ConfigConst.DEFAULT_STATUS
+            
+            if curCommand == ConfigConst.COMMAND_ON:
+                logging.info("Activating actuator...")
+                statusCode = self._activateActuator(data.getValue(), data.getStateData())
+            elif curCommand == ConfigConst.COMMAND_OFF:
+                logging.info("Deactivating actuator...")
+                statusCode = self._deactivateActuator(data.getValue(), data.getStateData())
+            else:
+                logging.warning("Unknown actuator command: %s", str(curCommand))
+                statusCode = -1
+            
+            # Update last known state
+            self.lastKnownCommand = curCommand
+            self.lastKnownValue = curVal
+            
+            # Create response
+            responseData = ActuatorData(typeID=self.typeID, name=self.name)
+            responseData.updateData(data)
+            responseData.setStatusCode(statusCode)
+            responseData.setAsResponse()
+            
+            return responseData
+        
+        return None
+    
+    def _activateActuator(self, val = ConfigConst.DEFAULT_VAL, stateData = None) -> int:
+        """
+        Activate the actuator (to be overridden by subclasses).
+        """
+        msg = "\n*******\n* O N *\n*******\n%s VALUE -> %.1f\n=======" % (self.simpleName, val)
+        logging.info("Simulating %s actuator ON: %s", self.name, msg)
+        return 0
+    
+    def _deactivateActuator(self, val = ConfigConst.DEFAULT_VAL, stateData = None) -> int:
+        """
+        Deactivate the actuator (to be overridden by subclasses).
+        """
+        msg = "\n*******\n* OFF *\n*******"
+        logging.info("Simulating %s actuator OFF: %s", self.simpleName, msg)
+        return 0

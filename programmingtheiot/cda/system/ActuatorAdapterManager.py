@@ -30,10 +30,52 @@ class ActuatorAdapterManager(object):
 	"""
 	
 	def __init__(self):
-		pass
+		self.configUtil = ConfigUtil()
+		
+		self.useEmulator = self.configUtil.getBoolean(
+			section = ConfigConst.CONSTRAINED_DEVICE,
+			key = ConfigConst.ENABLE_EMULATOR_KEY)
+		
+		self.locationID = self.configUtil.getProperty(
+			section = ConfigConst.CONSTRAINED_DEVICE,
+			key = ConfigConst.DEVICE_LOCATION_ID_KEY,
+			defaultVal = ConfigConst.NOT_SET)
+		
+		self.dataMsgListener = None
+		
+		# Initialize actuator tasks
+		if not self.useEmulator:
+			self.humidifierActuator = HumidifierActuatorSimTask()
+			self.hvacActuator = HvacActuatorSimTask()
 
 	def sendActuatorCommand(self, data: ActuatorData) -> bool:
-		pass
+		if data and not data.isResponseFlagEnabled():
+			if data.getLocationID() == self.locationID:
+				logging.info('Processing actuator command for loc ID %s.', 
+						   str(data.getLocationID()))
+				
+				aType = data.getTypeID()
+				responseData = None
+				
+				if aType == ConfigConst.HUMIDIFIER_ACTUATOR_TYPE and hasattr(self, 'humidifierActuator'):
+					responseData = self.humidifierActuator.updateActuator(data)
+				elif aType == ConfigConst.HVAC_ACTUATOR_TYPE and hasattr(self, 'hvacActuator'):
+					responseData = self.hvacActuator.updateActuator(data)
+				else:
+					logging.warning('No valid actuator for type: %s', aType)
+				
+				if responseData and self.dataMsgListener:
+					self.dataMsgListener.handleActuatorCommandResponse(responseData)
+					return True
+			else:
+				logging.warning('Invalid location ID: %s', str(data.getLocationID()))
+		else:
+			logging.warning('Invalid actuator msg. Ignoring.')
+		
+		return False
 	
 	def setDataMessageListener(self, listener: IDataMessageListener) -> bool:
-		pass
+		if listener:
+			self.dataMsgListener = listener
+			return True
+		return False
