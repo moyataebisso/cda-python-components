@@ -10,6 +10,8 @@
 # Programming the Internet of Things project.
 # 
 
+import logging
+
 from programmingtheiot.data.SensorData import SensorData
 
 import programmingtheiot.common.ConfigConst as ConfigConst
@@ -17,7 +19,7 @@ import programmingtheiot.common.ConfigConst as ConfigConst
 from programmingtheiot.common.ConfigUtil import ConfigUtil
 from programmingtheiot.cda.sim.BaseSensorSimTask import BaseSensorSimTask
 
-from pisense import SenseHAT
+from sense_emu import SenseHat
 
 class HumiditySensorEmulatorTask(BaseSensorSimTask):
 	"""
@@ -26,7 +28,25 @@ class HumiditySensorEmulatorTask(BaseSensorSimTask):
 	"""
 
 	def __init__(self, dataSet = None):
-		pass
+		super().__init__(sensorType = ConfigConst.HUMIDITY_SENSOR_TYPE, 
+						dataSet = dataSet,
+						minVal = ConfigConst.DEFAULT_VAL,
+						maxVal = 100.0)
+		
+		self.sh = SenseHat()
+		logging.info("HumiditySensorEmulatorTask initialized with SenseHat emulator")
 	
-	def generateTelemetry(self) -> SensorData:
-		pass
+	def generateTelemetry(self) -> float:
+		"""
+		Generate telemetry by reading from the Sense HAT emulator.
+		
+		@return float The humidity reading from the emulator
+		"""
+		humidity = self.sh.get_humidity()
+		self.latestSensorData = SensorData(typeID = self.sensorType)
+		self.latestSensorData.setValue(humidity)
+		self.latestSensorData.setName(ConfigConst.HUMIDITY_SENSOR_NAME)
+		
+		logging.debug("Generated humidity emulator data: %f", humidity)
+		
+		return humidity

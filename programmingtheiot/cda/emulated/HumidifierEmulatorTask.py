@@ -19,7 +19,7 @@ import programmingtheiot.common.ConfigConst as ConfigConst
 from programmingtheiot.common.ConfigUtil import ConfigUtil
 from programmingtheiot.cda.sim.BaseActuatorSimTask import BaseActuatorSimTask
 
-from pisense import SenseHAT
+from sense_emu import SenseHat
 
 class HumidifierEmulatorTask(BaseActuatorSimTask):
 	"""
@@ -28,11 +28,35 @@ class HumidifierEmulatorTask(BaseActuatorSimTask):
 	"""
 
 	def __init__(self):
-		pass
+		super().__init__(actuatorType = ConfigConst.HUMIDIFIER_ACTUATOR_TYPE, 
+						simpleName = "HUMIDIFIER")
+		
+		self.sh = SenseHat()
+		logging.info("HumidifierEmulatorTask initialized with SenseHat emulator")
 
 	def _activateActuator(self, val: float = ConfigConst.DEFAULT_VAL, stateData: str = None) -> int:
-		pass
+		"""
+		Activate the humidifier emulator by displaying green on LED matrix.
+		"""
+		logging.info("Activating humidifier emulator with value: %f", val)
+		
+		# Display green color for humidifier ON
+		self.sh.clear(0, 255, 0)
+		
+		# Optional: Display 'H' for Humidifier
+		self.sh.show_letter('H', text_colour=[0, 255, 0])
+		sleep(2)
+		self.sh.clear(0, 255, 0)
+		
+		return 0
 
 	def _deactivateActuator(self, val: float = ConfigConst.DEFAULT_VAL, stateData: str = None) -> int:
-		pass
-	
+		"""
+		Deactivate the humidifier emulator by clearing the LED matrix.
+		"""
+		logging.info("Deactivating humidifier emulator")
+		
+		# Clear the LED matrix
+		self.sh.clear()
+		
+		return 0

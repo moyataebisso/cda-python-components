@@ -19,7 +19,7 @@ import programmingtheiot.common.ConfigConst as ConfigConst
 from programmingtheiot.common.ConfigUtil import ConfigUtil
 from programmingtheiot.cda.sim.BaseActuatorSimTask import BaseActuatorSimTask
 
-from pisense import SenseHAT
+from sense_emu import SenseHat
 
 class HvacEmulatorTask(BaseActuatorSimTask):
 	"""
@@ -28,11 +28,43 @@ class HvacEmulatorTask(BaseActuatorSimTask):
 	"""
 
 	def __init__(self):
-		pass
+		super().__init__(actuatorType = ConfigConst.HVAC_ACTUATOR_TYPE, 
+						simpleName = "HVAC")
+		
+		self.sh = SenseHat()
+		logging.info("HvacEmulatorTask initialized with SenseHat emulator")
 
 	def _activateActuator(self, val: float = ConfigConst.DEFAULT_VAL, stateData: str = None) -> int:
-		pass
+		"""
+		Activate the HVAC emulator by displaying blue (cooling) or red (heating) on LED matrix.
+		"""
+		logging.info("Activating HVAC emulator with value: %f", val)
+		
+		if val < 20.0:
+			# Heating mode - display red
+			self.sh.clear(255, 0, 0)
+			self.sh.show_letter('H', text_colour=[255, 0, 0])
+		else:
+			# Cooling mode - display blue
+			self.sh.clear(0, 0, 255)
+			self.sh.show_letter('C', text_colour=[0, 0, 255])
+		
+		sleep(2)
+		
+		if val < 20.0:
+			self.sh.clear(255, 0, 0)
+		else:
+			self.sh.clear(0, 0, 255)
+		
+		return 0
 
 	def _deactivateActuator(self, val: float = ConfigConst.DEFAULT_VAL, stateData: str = None) -> int:
-		pass
-	
+		"""
+		Deactivate the HVAC emulator by clearing the LED matrix.
+		"""
+		logging.info("Deactivating HVAC emulator")
+		
+		# Clear the LED matrix
+		self.sh.clear()
+		
+		return 0

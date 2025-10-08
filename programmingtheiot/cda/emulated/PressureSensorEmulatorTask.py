@@ -10,6 +10,8 @@
 # Programming the Internet of Things project.
 # 
 
+import logging
+
 from programmingtheiot.data.SensorData import SensorData
 
 import programmingtheiot.common.ConfigConst as ConfigConst
@@ -17,7 +19,7 @@ import programmingtheiot.common.ConfigConst as ConfigConst
 from programmingtheiot.common.ConfigUtil import ConfigUtil
 from programmingtheiot.cda.sim.BaseSensorSimTask import BaseSensorSimTask
 
-from pisense import SenseHAT
+from sense_emu import SenseHat
 
 class PressureSensorEmulatorTask(BaseSensorSimTask):
 	"""
@@ -26,7 +28,25 @@ class PressureSensorEmulatorTask(BaseSensorSimTask):
 	"""
 
 	def __init__(self, dataSet = None):
-		pass
+		super().__init__(sensorType = ConfigConst.PRESSURE_SENSOR_TYPE, 
+						dataSet = dataSet,
+						minVal = 900.0,
+						maxVal = 1100.0)
+		
+		self.sh = SenseHat()
+		logging.info("PressureSensorEmulatorTask initialized with SenseHat emulator")
 	
-	def generateTelemetry(self) -> SensorData:
-		pass
+	def generateTelemetry(self) -> float:
+		"""
+		Generate telemetry by reading from the Sense HAT emulator.
+		
+		@return float The pressure reading from the emulator
+		"""
+		pressure = self.sh.get_pressure()
+		self.latestSensorData = SensorData(typeID = self.sensorType)
+		self.latestSensorData.setValue(pressure)
+		self.latestSensorData.setName(ConfigConst.PRESSURE_SENSOR_NAME)
+		
+		logging.debug("Generated pressure emulator data: %f", pressure)
+		
+		return pressure
