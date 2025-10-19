@@ -1,62 +1,50 @@
-#####
-# 
-# This class is part of the Programming the Internet of Things
-# project, and is available via the MIT License, which can be
-# found in the LICENSE file at the top level of this repository.
-# 
-# You may find it more helpful to your design to adjust the
-# functionality, constants and interfaces (if there are any)
-# provided within in order to meet the needs of your specific
-# Programming the Internet of Things project.
-# 
-
 import logging
-
 from time import sleep
-
 import programmingtheiot.common.ConfigConst as ConfigConst
-
 from programmingtheiot.common.ConfigUtil import ConfigUtil
 from programmingtheiot.cda.sim.BaseActuatorSimTask import BaseActuatorSimTask
-
-from sense_emu import SenseHat
+from pisense import SenseHAT
 
 class HumidifierEmulatorTask(BaseActuatorSimTask):
-	"""
-	Shell representation of class for student implementation.
-	
-	"""
-
-	def __init__(self):
-		super().__init__(actuatorType = ConfigConst.HUMIDIFIER_ACTUATOR_TYPE, 
-						simpleName = "HUMIDIFIER")
-		
-		self.sh = SenseHat()
-		logging.info("HumidifierEmulatorTask initialized with SenseHat emulator")
-
-	def _activateActuator(self, val: float = ConfigConst.DEFAULT_VAL, stateData: str = None) -> int:
-		"""
-		Activate the humidifier emulator by displaying green on LED matrix.
-		"""
-		logging.info("Activating humidifier emulator with value: %f", val)
-		
-		# Display green color for humidifier ON
-		self.sh.clear(0, 255, 0)
-		
-		# Optional: Display 'H' for Humidifier
-		self.sh.show_letter('H', text_colour=[0, 255, 0])
-		sleep(2)
-		self.sh.clear(0, 255, 0)
-		
-		return 0
-
-	def _deactivateActuator(self, val: float = ConfigConst.DEFAULT_VAL, stateData: str = None) -> int:
-		"""
-		Deactivate the humidifier emulator by clearing the LED matrix.
-		"""
-		logging.info("Deactivating humidifier emulator")
-		
-		# Clear the LED matrix
-		self.sh.clear()
-		
-		return 0
+    def __init__(self):
+        super(HumidifierEmulatorTask, self).__init__(
+            name=ConfigConst.HUMIDIFIER_ACTUATOR_NAME,
+            typeID=ConfigConst.HUMIDIFIER_ACTUATOR_TYPE,
+            simpleName="HUMIDIFIER")
+        
+        enableEmulation = ConfigUtil().getBoolean(
+            ConfigConst.CONSTRAINED_DEVICE, 
+            ConfigConst.ENABLE_EMULATOR_KEY)
+        
+        self.sh = SenseHAT(emulate=enableEmulation)
+        logging.info(f"HumidifierEmulatorTask initialized with emulation={enableEmulation}")
+    
+    def _activateActuator(self, val: float = ConfigConst.DEFAULT_VAL, 
+                          stateData: str = None) -> int:
+        try:
+            if self.sh.screen:
+                msg = self.getSimpleName() + ' ON: ' + str(val) + 'C'
+                self.sh.screen.scroll_text(msg)
+                return 0
+        except:
+            logging.info(f"Emulator: {self.getSimpleName()} ON: {val}")
+            return 0
+        
+        logging.warning("No SenseHAT LED screen instance to write.")
+        return -1
+    
+    def _deactivateActuator(self, val: float = ConfigConst.DEFAULT_VAL, 
+                            stateData: str = None) -> int:
+        try:
+            if self.sh.screen:
+                msg = self.getSimpleName() + ' OFF'
+                self.sh.screen.scroll_text(msg)
+                sleep(5)
+                self.sh.screen.clear()
+                return 0
+        except:
+            logging.info(f"Emulator: {self.getSimpleName()} OFF")
+            return 0
+            
+        logging.warning("No SenseHAT LED screen instance to clear.")
+        return -1

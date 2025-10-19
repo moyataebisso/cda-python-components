@@ -19,10 +19,6 @@ from programmingtheiot.data.ActuatorData import ActuatorData
 from programmingtheiot.cda.sim.HvacActuatorSimTask import HvacActuatorSimTask
 from programmingtheiot.cda.sim.HumidifierActuatorSimTask import HumidifierActuatorSimTask
 
-# Import emulator tasks
-from programmingtheiot.cda.emulated.HvacEmulatorTask import HvacEmulatorTask
-from programmingtheiot.cda.emulated.HumidifierEmulatorTask import HumidifierEmulatorTask
-
 class ActuatorAdapterManager(object):
     """
     Actuator adapter manager implementation.
@@ -42,25 +38,42 @@ class ActuatorAdapterManager(object):
         
         self.dataMsgListener = None
         
-        # Initialize actuator tasks based on emulator setting
-        if self.useEmulator:
-            logging.info("ActuatorAdapterManager is using emulator tasks.")
-            
-            try:
-                self.humidifierActuator = HumidifierEmulatorTask()
-                self.hvacActuator = HvacEmulatorTask()
-                logging.info("Successfully initialized emulator actuators")
-            except Exception as e:
-                logging.error("Failed to initialize emulator actuators: %s", str(e))
-                logging.info("Falling back to simulator tasks")
-                self.humidifierActuator = HumidifierActuatorSimTask()
-                self.hvacActuator = HvacActuatorSimTask()
-        else:
-            logging.info("ActuatorAdapterManager is using simulator tasks.")
-            self.humidifierActuator = HumidifierActuatorSimTask()
-            self.hvacActuator = HvacActuatorSimTask()
+        # Initialize environmental actuation tasks
+        self._initEnvironmentalActuationTasks()
         
         logging.info("Actuator location ID: %s", self.locationID)
+    
+    def _initEnvironmentalActuationTasks(self):
+        """
+        Initialize environmental actuation tasks based on configuration.
+        """
+        if not self.useEmulator:
+            logging.info("ActuatorAdapterManager is using simulator tasks.")
+            
+            # Load the environmental tasks for simulated actuation
+            self.humidifierActuator = HumidifierActuatorSimTask()
+            self.hvacActuator = HvacActuatorSimTask()
+            self.ledDisplayActuator = None  # No LED simulator in basic setup
+        else:
+            logging.info("ActuatorAdapterManager is using emulator tasks.")
+            
+            # Dynamically load humidifier emulator
+            hueModule = import_module('programmingtheiot.cda.emulated.HumidifierEmulatorTask', 
+                                     'HumidifierEmulatorTask')
+            hueClazz = getattr(hueModule, 'HumidifierEmulatorTask')
+            self.humidifierActuator = hueClazz()
+            
+            # Dynamically load HVAC emulator
+            hveModule = import_module('programmingtheiot.cda.emulated.HvacEmulatorTask', 
+                                     'HvacEmulatorTask')
+            hveClazz = getattr(hveModule, 'HvacEmulatorTask')
+            self.hvacActuator = hveClazz()
+            
+            # Dynamically load LED display emulator
+            leModule = import_module('programmingtheiot.cda.emulated.LedDisplayEmulatorTask', 
+                                    'LedDisplayEmulatorTask')
+            leClazz = getattr(leModule, 'LedDisplayEmulatorTask')
+            self.ledDisplayActuator = leClazz()
 
     def sendActuatorCommand(self, data: ActuatorData) -> bool:
         """
@@ -83,6 +96,9 @@ class ActuatorAdapterManager(object):
                 elif aType == ConfigConst.HVAC_ACTUATOR_TYPE and hasattr(self, 'hvacActuator'):
                     responseData = self.hvacActuator.updateActuator(data)
                     logging.debug("HVAC actuator command processed")
+                elif aType == ConfigConst.LED_DISPLAY_ACTUATOR_TYPE and hasattr(self, 'ledDisplayActuator') and self.ledDisplayActuator:
+                    responseData = self.ledDisplayActuator.updateActuator(data)
+                    logging.debug("LED display actuator command processed")
                 else:
                     logging.warning('No valid actuator for type: %s', aType)
                 

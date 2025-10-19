@@ -7,6 +7,7 @@
 
 import logging
 from apscheduler.schedulers.background import BackgroundScheduler
+from importlib import import_module
 
 import programmingtheiot.common.ConfigConst as ConfigConst
 from programmingtheiot.common.ConfigUtil import ConfigUtil
@@ -19,11 +20,6 @@ from programmingtheiot.cda.sim.TemperatureSensorSimTask import TemperatureSensor
 from programmingtheiot.cda.sim.HumiditySensorSimTask import HumiditySensorSimTask
 from programmingtheiot.cda.sim.PressureSensorSimTask import PressureSensorSimTask
 
-# Import emulator tasks
-from programmingtheiot.cda.emulated.TemperatureSensorEmulatorTask import TemperatureSensorEmulatorTask
-from programmingtheiot.cda.emulated.HumiditySensorEmulatorTask import HumiditySensorEmulatorTask
-from programmingtheiot.cda.emulated.PressureSensorEmulatorTask import PressureSensorEmulatorTask
-
 # Import data generator
 from programmingtheiot.cda.sim.SensorDataGenerator import SensorDataGenerator
 
@@ -33,9 +29,9 @@ class SensorAdapterManager(object):
     """
     
     def __init__(self):
-        configUtil = ConfigUtil()
+        self.configUtil = ConfigUtil()
         
-        self.pollRate = configUtil.getInteger(
+        self.pollRate = self.configUtil.getInteger(
             section = ConfigConst.CONSTRAINED_DEVICE,
             key = ConfigConst.POLL_CYCLES_KEY,
             defaultVal = ConfigConst.DEFAULT_POLL_CYCLES)
@@ -43,11 +39,11 @@ class SensorAdapterManager(object):
         if self.pollRate <= 0:
             self.pollRate = ConfigConst.DEFAULT_POLL_CYCLES
         
-        self.useEmulator = configUtil.getBoolean(
+        self.useEmulator = self.configUtil.getBoolean(
             section = ConfigConst.CONSTRAINED_DEVICE,
             key = ConfigConst.ENABLE_EMULATOR_KEY)
         
-        self.locationID = configUtil.getProperty(
+        self.locationID = self.configUtil.getProperty(
             section = ConfigConst.CONSTRAINED_DEVICE,
             key = ConfigConst.DEVICE_LOCATION_ID_KEY,
             defaultVal = ConfigConst.NOT_SET)
@@ -58,42 +54,87 @@ class SensorAdapterManager(object):
         self.scheduler = BackgroundScheduler()
         self.scheduler.add_job(self.handleTelemetry, 'interval', seconds = self.pollRate)
         
-        # Initialize sensor tasks based on emulator setting
-        if self.useEmulator:
-            logging.info("SensorAdapterManager is using emulator tasks.")
-            
-            try:
-                self.tempSensor = TemperatureSensorEmulatorTask()
-                self.humiSensor = HumiditySensorEmulatorTask()
-                self.presSensor = PressureSensorEmulatorTask()
-                logging.info("Successfully initialized emulator sensors")
-            except Exception as e:
-                logging.error("Failed to initialize emulator sensors: %s", str(e))
-                logging.info("Falling back to simulator tasks")
-                self._initSimulatorTasks()
-        else:
-            logging.info("SensorAdapterManager is using simulator tasks.")
-            self._initSimulatorTasks()
+        # Initialize environmental sensor tasks
+        self._initEnvironmentalSensorTasks()
         
         logging.info("Sensor location ID: %s", self.locationID)
     
-    def _initSimulatorTasks(self):
+    def _initEnvironmentalSensorTasks(self):
         """
-        Initialize simulator tasks - simplest working approach from Lab Module 03.
+        Initialize environmental sensor tasks based on configuration.
         """
-        # Simple initialization without data sets - this worked in Lab Module 03
-        self.tempSensor = TemperatureSensorSimTask()
-        self.humiSensor = HumiditySensorSimTask()
-        self.presSensor = PressureSensorSimTask()
+        if not self.useEmulator:
+            logging.info("SensorAdapterManager is using simulator tasks.")
+            
+            # Load simulator data sets
+            self.dataGenerator = SensorDataGenerator()
+            
+            humidityFloor = self.configUtil.getFloat(
+                section = ConfigConst.CONSTRAINED_DEVICE, 
+                key = ConfigConst.HUMIDITY_SIM_FLOOR_KEY,
+                defaultVal = SensorDataGenerator.LOW_NORMAL_ENV_HUMIDITY)
+            humidityCeiling = self.configUtil.getFloat(
+                section = ConfigConst.CONSTRAINED_DEVICE, 
+                key = ConfigConst.HUMIDITY_SIM_CEILING_KEY,
+                defaultVal = SensorDataGenerator.HI_NORMAL_ENV_HUMIDITY)
+            
+            pressureFloor = self.configUtil.getFloat(
+                section = ConfigConst.CONSTRAINED_DEVICE, 
+                key = ConfigConst.PRESSURE_SIM_FLOOR_KEY,
+                defaultVal = SensorDataGenerator.LOW_NORMAL_ENV_PRESSURE)
+            pressureCeiling = self.configUtil.getFloat(
+                section = ConfigConst.CONSTRAINED_DEVICE, 
+                key = ConfigConst.PRESSURE_SIM_CEILING_KEY,
+                defaultVal = SensorDataGenerator.HI_NORMAL_ENV_PRESSURE)
+            
+            tempFloor = self.configUtil.getFloat(
+                section = ConfigConst.CONSTRAINED_DEVICE, 
+                key = ConfigConst.TEMP_SIM_FLOOR_KEY,
+                defaultVal = SensorDataGenerator.LOW_NORMAL_INDOOR_TEMP)
+            tempCeiling = self.configUtil.getFloat(
+                section = ConfigConst.CONSTRAINED_DEVICE, 
+                key = ConfigConst.TEMP_SIM_CEILING_KEY,
+                defaultVal = SensorDataGenerator.HI_NORMAL_INDOOR_TEMP)
+            
+            # Generate data sets
+            humidityData = self.dataGenerator.generateDailyEnvironmentHumidityDataSet(
+                minValue = humidityFloor, maxValue = humidityCeiling, useSeconds = False)
+            pressureData = self.dataGenerator.generateDailyEnvironmentPressureDataSet(
+                minValue = pressureFloor, maxValue = pressureCeiling, useSeconds = False)
+            tempData = self.dataGenerator.generateDailyIndoorTemperatureDataSet(
+                minValue = tempFloor, maxValue = tempCeiling, useSeconds = False)
+            
+            # Create simulator tasks
+            self.humidityAdapter = HumiditySensorSimTask(dataSet = humidityData)
+            self.pressureAdapter = PressureSensorSimTask(dataSet = pressureData)
+            self.tempAdapter = TemperatureSensorSimTask(dataSet = tempData)
+        else:
+            logging.info("SensorAdapterManager is using emulator tasks.")
+            
+            # Dynamically load emulator modules
+            heModule = import_module('programmingtheiot.cda.emulated.HumiditySensorEmulatorTask', 
+                                    'HumiditySensorEmulatorTask')
+            heClazz = getattr(heModule, 'HumiditySensorEmulatorTask')
+            self.humidityAdapter = heClazz()
+            
+            peModule = import_module('programmingtheiot.cda.emulated.PressureSensorEmulatorTask', 
+                                    'PressureSensorEmulatorTask')
+            peClazz = getattr(peModule, 'PressureSensorEmulatorTask')
+            self.pressureAdapter = peClazz()
+            
+            teModule = import_module('programmingtheiot.cda.emulated.TemperatureSensorEmulatorTask', 
+                                    'TemperatureSensorEmulatorTask')
+            teClazz = getattr(teModule, 'TemperatureSensorEmulatorTask')
+            self.tempAdapter = teClazz()
     
     def handleTelemetry(self):
         """
         Handle telemetry generation for all sensors.
         """
         # Generate telemetry - returns SensorData objects
-        tempData = self.tempSensor.generateTelemetry()
-        humiData = self.humiSensor.generateTelemetry()
-        pressData = self.presSensor.generateTelemetry()
+        tempData = self.tempAdapter.generateTelemetry()
+        humiData = self.humidityAdapter.generateTelemetry()
+        pressData = self.pressureAdapter.generateTelemetry()
         
         # Set location ID for all data objects
         tempData.setLocationID(self.locationID)
