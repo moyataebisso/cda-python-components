@@ -1,10 +1,3 @@
-#####
-# 
-# This class is part of the Programming the Internet of Things
-# project, and is available via the MIT License, which can be
-# found in the LICENSE file at the top level of this repository.
-#
-
 import logging
 from apscheduler.schedulers.background import BackgroundScheduler
 
@@ -14,20 +7,24 @@ from programmingtheiot.common.IDataMessageListener import IDataMessageListener
 
 from programmingtheiot.cda.system.SystemCpuUtilTask import SystemCpuUtilTask
 from programmingtheiot.cda.system.SystemMemUtilTask import SystemMemUtilTask
+
+# Add this import
 from programmingtheiot.data.SystemPerformanceData import SystemPerformanceData
 
 class SystemPerformanceManager(object):
-    """
-    System performance manager implementation.
-    """
     
     def __init__(self):
         configUtil = ConfigUtil()
         
         self.pollRate = configUtil.getInteger(
-            section = ConfigConst.CONSTRAINED_DEVICE,
-            key = ConfigConst.POLL_CYCLES_KEY,
-            defaultVal = ConfigConst.DEFAULT_POLL_CYCLES)
+            section=ConfigConst.CONSTRAINED_DEVICE,
+            key=ConfigConst.POLL_CYCLES_KEY,
+            defaultVal=ConfigConst.DEFAULT_POLL_CYCLES)
+        
+        self.locationID = configUtil.getProperty(
+            section=ConfigConst.CONSTRAINED_DEVICE,
+            key=ConfigConst.DEVICE_LOCATION_ID_KEY,
+            defaultVal=ConfigConst.NOT_SET)
         
         if self.pollRate <= 0:
             self.pollRate = ConfigConst.DEFAULT_POLL_CYCLES
@@ -35,24 +32,35 @@ class SystemPerformanceManager(object):
         self.dataMsgListener = None
         
         self.scheduler = BackgroundScheduler()
-        self.scheduler.add_job(self.handleTelemetry, 'interval', seconds = self.pollRate)
+        self.scheduler.add_job(self.handleTelemetry, 'interval', seconds=self.pollRate)
         
         self.cpuUtilTask = SystemCpuUtilTask()
         self.memUtilTask = SystemMemUtilTask()
         
-        logging.info("Initialized SystemPerformanceManager with poll rate: %s", self.pollRate)
+        logging.info("System Performance Manager initialized with poll rate: %s", self.pollRate)
     
     def handleTelemetry(self):
-        cpuVal = self.cpuUtilTask.getTelemetryValue()
-        memVal = self.memUtilTask.getTelemetryValue()
+        """
+        Handle telemetry using SystemPerformanceData container
+        """
+        # Get CPU utilization
+        cpuUtil = self.cpuUtilTask.getTelemetryValue()
         
+        # Get Memory utilization
+        memUtil = self.memUtilTask.getTelemetryValue()
+        
+        # Create SystemPerformanceData container
         sysPerfData = SystemPerformanceData()
-        sysPerfData.setCpuUtilization(cpuVal)
-        sysPerfData.setMemoryUtilization(memVal)
+        sysPerfData.setLocationID(self.locationID)
+        sysPerfData.setCpuUtilization(cpuUtil)
+        sysPerfData.setMemoryUtilization(memUtil)
         
-        logging.debug('CPU utilization: %s%%', cpuVal)
-        logging.debug('Memory utilization: %s%%', memVal)
+        # Log the data
+        logging.debug('CPU utilization: %s%%', cpuUtil)
+        logging.debug('Memory utilization: %s%%', memUtil)
+        logging.info('System performance data: %s', str(sysPerfData))
         
+        # Send to listener if available
         if self.dataMsgListener:
             self.dataMsgListener.handleSystemPerformanceMessage(sysPerfData)
     
@@ -65,13 +73,15 @@ class SystemPerformanceManager(object):
         
         if not self.scheduler.running:
             self.scheduler.start()
+            logging.info("SystemPerformanceManager started.")
         else:
-            logging.warning("SystemPerformanceManager scheduler already started.")
+            logging.warning("SystemPerformanceManager scheduler already running.")
     
     def stopManager(self):
         logging.info("Stopping SystemPerformanceManager...")
         
         try:
             self.scheduler.shutdown()
+            logging.info("SystemPerformanceManager stopped.")
         except:
             logging.warning("SystemPerformanceManager scheduler already stopped.")
