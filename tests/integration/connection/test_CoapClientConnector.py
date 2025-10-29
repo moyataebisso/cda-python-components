@@ -58,7 +58,7 @@ class CoapClientConnectorTest(unittest.TestCase):
 	def tearDown(self):
 		pass
 
-	@unittest.skip("Ignore for now.")
+	#@unittest.skip("Ignore for now.")
 	def testConnectAndDiscover(self):
 		"""
 		Comment the annotation to test Connect and Discover
@@ -110,7 +110,7 @@ class CoapClientConnectorTest(unittest.TestCase):
 		self.coapClient.sendPostRequest( \
 			resource = ResourceNameEnum.CDA_SENSOR_MSG_RESOURCE, enableCON = True, payload = jsonData, timeout = 5)
 	
-	@unittest.skip("Ignore for now.")
+	#@unittest.skip("Ignore for now.")
 	def testPostSensorMessageNon(self):
 		"""
 		Comment the annotation to test NON POST
